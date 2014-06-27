@@ -1,17 +1,13 @@
 package main
 
 import (
-	"fmt"
-	// "strings"
-
 	"flag"
+	"fmt"
 	"gopkg.in/yaml.v1"
 	"io/ioutil"
 	"os"
-
+	"os/exec"
 	"path/filepath"
-	// "regexp"
-	// "time"
 )
 
 const Version = "0.0.1"
@@ -85,12 +81,29 @@ func getConfig(yamlData []byte, env string) (*DbConfig, error) {
 	return config, nil
 }
 
-func createUserCommand(config *DbConfig) string {
-	return fmt.Sprintf("createuser -h %s -d -R -e -w %s", config.Host, config.Username)
+func createUserCommand(config *DbConfig) *exec.Cmd {
+	return exec.Command("createuser", "-h", config.Host, "-S", "-d", "-R", "-e", "-w", config.Username)
 }
 
-func createDatabaseCommand(config *DbConfig) string {
-	return fmt.Sprintf("createdb -h %s -O  %s -U %s -d -w -e %s", config.Host, config.Username, config.Username, config.Database)
+func createDatabaseCommand(config *DbConfig) *exec.Cmd {
+	return exec.Command("createdb", "-h", config.Host, "-O", config.Username, "-U", config.Username, "-d", "-w", "-e", config.Database)
+}
+
+func runCommand(cmd *exec.Cmd) error {
+	fmt.Println("Running: ", cmd)
+	output, err := cmd.Output()
+	fmt.Println(string(output))
+	return err
+}
+
+func handleError(err error, clean bool) {
+	if err != nil {
+		printError(err.Error())
+		if clean != true {
+			printError("Exiting...")
+			os.Exit(1)
+		}
+	}
 }
 
 func main() {
@@ -98,7 +111,9 @@ func main() {
 	var version bool
 	var path string
 	var environment string
+	var clean bool
 	flag.BoolVar(&version, "v", false, "Prints current version")
+	flag.BoolVar(&clean, "c", false, "Don't exit on errors, useful for CI")
 	flag.StringVar(&path, "p", "config/database.yml", "Path to yaml (otherwise config/database.yml)")
 	flag.StringVar(&environment, "e", "test", "Set the database test env to create")
 	flag.Parse()
@@ -110,27 +125,27 @@ func main() {
 
 	filePath, err := getYamlPath(path)
 
-	if err != nil {
-		printError("File does not exist")
-		os.Exit(2)
-	}
+	handleError(err, clean)
 
 	fmt.Println("Using file configuration file:", filePath)
 
 	yamlData, err := ioutil.ReadFile(filePath)
 
-	if err != nil {
-		printError(fmt.Sprintf("Could not read yaml file %v", err))
-		os.Exit(2)
-	}
+	handleError(err, clean)
 
 	config, err := getConfig(yamlData, environment)
-	if err != nil {
-		os.Exit(2)
-	}
 
-	fmt.Println(createUserCommand(config))
-	fmt.Println(createDatabaseCommand(config))
+	handleError(err, clean)
 
+	err = runCommand(createUserCommand(config))
 
+	handleError(err, clean)
+
+	err = runCommand(createDatabaseCommand(config))
+
+	handleError(err, clean)
+
+	fmt.Println("Done...")
+
+	os.Exit(0)
 }
