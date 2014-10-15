@@ -86,7 +86,7 @@ func createUserCommand(config *DbConfig) *exec.Cmd {
 }
 
 func createDatabaseCommand(config *DbConfig) *exec.Cmd {
-	return exec.Command("createdb", "-h", config.Host, "-O", config.Username, "-U", config.Username, "-d", "-w", "-e", config.Database)
+	return exec.Command("createdb", "-h", config.Host, "-O", config.Username, "-U", config.Username, "-w", "-e", config.Database)
 }
 
 func runCommand(cmd *exec.Cmd) error {
